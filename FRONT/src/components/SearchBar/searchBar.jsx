@@ -1,20 +1,15 @@
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  setRecipeIdAutocomplete,
-  setSearchValueName,
-} from "../../Redux/actions/index.js";
+import { setRecipeIdAutocomplete } from "../../Redux/actions/autocomplete";
 import { ReactSearchAutocomplete } from "react-search-autocomplete";
-import { filterByDiet, setOrderBy, getIngredients } from "../../Redux/actions/index.js";
+import { filterByDiet } from "../../Redux/actions/filters";
+import { getIngredients } from "../../Redux/actions/ingredients";
 import s from "../SearchBar/searchBar.module.css";
-import Select from "react-select";
-import { useNavigate} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 export default function SearchBar() {
   const dispatch = useDispatch();
-  const recipes = useSelector((state) => state.recipes);
-  const diets = useSelector((state) => state.diets);
-  const orderBy = useSelector((state) => state.orderBy);
+  const recipes = useSelector((state) => state.recipes.recipes);
   const navigate = useNavigate();
 
   const mapRecipes = recipes.map((r) => {
@@ -32,7 +27,7 @@ export default function SearchBar() {
   const handleOnSelect = (item) => {
     dispatch(setRecipeIdAutocomplete(item.id));
     dispatch(filterByDiet(""));
-    dispatch(getIngredients(item.id))
+    dispatch(getIngredients(item.id));
 
     navigate(`/recipes/${item.id}`);
   };
@@ -49,35 +44,6 @@ export default function SearchBar() {
     );
   };
 
-  const handleSearch = (event) => {
-    dispatch(setSearchValueName(event.target.value));
-  };
-
-  const handleFilterbyDiet = (event) => {
-    dispatch(filterByDiet(event.value));
-  };
-
-  const orderSelectByAlphabetical = [
-    { label: "Select Order Alphabetical", value: "" },
-    { label: "A-Z", value: "A-Z" },
-    { label: "Z-A", value: "Z-A" },
-  ];
-
-  const optionsDiets = diets.map((diet) => {
-    diet = diet[0].toUpperCase() + diet.slice(1);
-    return { label: diet, value: diet };
-  });
-
-  const handleOrder = (e, { type }) => {
-    let cache = { ...orderBy };
-
-    if (orderBy.type !== type) cache.type = type;
-
-    cache.order = e.value;
-
-    dispatch(setOrderBy(cache));
-  };
-
   return (
     <div className={s.container}>
       <div className={s.componentDiv}>
@@ -90,6 +56,7 @@ export default function SearchBar() {
           autoFocus
           formatResult={formatResult}
           placeholder="Search Recipe"
+          className={s.ReactSearchAutocomplete}
         />
       </div>
     </div>

@@ -1,10 +1,14 @@
-const router = require('express').Router();
-const getReviews = require('../controllers/getReviews');
-const postReview = require('../controllers/postReview');
+const router = require("express").Router();
+const getReviews = require("../controllers/getReviews");
+const postReview = require("../controllers/postReview");
 
-router.get('/user/:userId', getReviews);
-router.get('/recipe/:recipeId', getReviews);
-router.get('/', getReviews);
-router.post('/', postReview);
+const putReview = require("../controllers/putReview");
+const deleteReview = require("../controllers/deleteReview");
+
+router.get("/", getReviews);
+router.post("/", postReview);
+router.delete("/", deleteReview);
+router.put("/", putReview);
+
 
 module.exports = router;

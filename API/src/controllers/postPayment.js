@@ -1,27 +1,29 @@
-const mercadopago = require("mercadopago");
-const {MERCADOPAGO_KEY} = process.env;
+const { Orders } = require("../db.js");
+const stockReserve = require("../helpers/stockReserve");
+const sendEmailWithTemplate = require("../mailer/sendEmailWithTemplate");
 
-mercadopago.configure({ access_token: MERCADOPAGO_KEY });
+module.exports = async (req, res) => {
+  try {
+    let orderInstance;
 
-module.exports = (req, res) => {
-  let preference = {
-    items: req.body.orderDetail,
-    back_urls: {
-      success: "https://localhost:3000/home",
-      failure: "",
-      pending: "",
-    },
-    auto_return: "approved",
-    binary_mode: true,
-  };
+    if (req.body?.status === "approved")
+      orderInstance = await Orders.findOne({
+        where: { status: 0, preferenceId: req.body?.preference_id },
+      });
 
-  mercadopago.preferences
-    .create(preference)
-    .then((response) => {
-      res.status(200).send(response);
-    })
-    .catch((error) => {
-      console.log(error.message)
-      res.status(400).send({ error: error.message });
+    if (!orderInstance) return res.status(404).send("No order");
+
+    await orderInstance.update({ status: 1, tsPayment: new Date() });
+
+    sendEmailWithTemplate(req.body.email, "paymentReceived", {
+      orderNumber: orderInstance.id,
     });
+
+    await stockReserve(orderInstance.id);
+
+    res.send(orderInstance);
+  } catch (error) {
+    console.log(error);
+    res.status(500).send(error);
+  }
 };

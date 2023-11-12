@@ -1,7 +1,4 @@
-.containerMain {
-  background-color: #ffffff;
-  background-image: linear-gradient(62deg, #ffffff 0%, #ffffff 100%);
-}
+
 
 .divPagination {
   display: flex;
@@ -31,11 +28,16 @@
 
 .cardsContainer {
   width: 100%;
-  padding: 4rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 6rem;
   box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-evenly;
+  justify-content: space-around;
 }
 
 .healtyTipDiv {

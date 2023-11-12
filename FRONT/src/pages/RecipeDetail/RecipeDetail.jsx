@@ -2,15 +2,18 @@ import React, { useEffect, useState, useReducer } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate, NavLink } from "react-router-dom";
+import { getRecipeDetail } from "../../Redux/actions/recipes";
+import { getIngredients } from "../../Redux/actions/ingredients";
 import {
-  getRecipeDetail,
-  getIngredients,
-  addToCart,
-  setCart,
-} from "../../Redux/actions";
+  deleteReview,
+  getFavorites,
+  postReview,
+} from "../../Redux/actions/favorites";
+import { setCart, addToCart } from "../../Redux/actions/cart";
 import s from "../RecipeDetail/RecipeDetail.module.css";
 import NavBar from "../../components/NavBar/NavBar";
 import IngredientsList from "../../components/IngredientsList/ingredientsList";
+import ReviewsBox from "../../components/ReviewsBox/ReviewsBox";
 import {
   Box,
   Image,
@@ -18,23 +21,39 @@ import {
   IconButton,
   Button,
   Container,
+  ListItem,
   Tabs,
   TabList,
   TabPanels,
+  Spinner,
   Tab,
   TabPanel,
+  UnorderedList,
+  Stack,
+  VStack,
+  Input,
+  HStack
 } from "@chakra-ui/react";
-import background from "../../img/BackgroundDetail.jpg";
+import background from "../../img/RDetailBG.jpg";
+import { FaRegHeart, FaHeart } from "react-icons/fa";
+const { REACT_APP_BACK_URL } = process.env;
 
 const RecipeDetail = () => {
   let { id } = useParams();
   const { user } = useAuth0();
   let dispatch = useDispatch();
-  let recipe = useSelector((state) => state.recipeDetail);
-  const ingredients = useSelector((state) => state.ingredients);
-  const [list, setList] = useState(); // Traigo datos faltantes de ingredients
-  //formato list: [{id, name, price}, {id, name, price}...]
-  const cart = useSelector(({ cart }) => cart);
+  let recipe = useSelector((state) => state.recipes.recipeDetail);
+  const ingredients = useSelector((state) => state.ingredients.ingredients);
+  const [list, setList] = useState();
+  const cart = useSelector((state) => state.cart.cart);
+  const [loading, setLoading] = useState(false);
+  const LS_user = JSON.parse(localStorage.getItem("MANGIARE_user"));
+
+  let png = "https://cdn-icons-png.flaticon.com/512/7780/7780562.png";
+
+  const [state, setState] = useState({ address: null });
+  const { email } = useAuth0().user || { email: null };
+
 
   //                   --------------- localStorage ---------------
   useEffect(() => {
@@ -42,17 +61,40 @@ const RecipeDetail = () => {
     if (!LS_cart) return;
     else {
       dispatch(setCart(LS_cart));
-      user
-        ? localStorage.setItem("MANGIARE_user", JSON.stringify(user.email))
-        : localStorage.setItem("MANGIARE_user", JSON.stringify("guest"));
     }
   }, [user]);
+
+  const handleLocalStorage = (ingredient) => {
+    let LS_cart = JSON.parse(localStorage.getItem("MANGIARE_cart"));
+    if (!LS_cart) {
+      localStorage.setItem("MANGIARE_cart", JSON.stringify([...ingredient]));
+    } else {
+      let index = LS_cart.indexOf(LS_cart.find((i) => ((i.id === ingredient[0].id) && (i.unit == ingredient[0].unit))));
+      if (index === -1) {
+        localStorage.setItem(
+          "MANGIARE_cart",
+          JSON.stringify([...LS_cart, ...ingredient])
+        );
+      } else {
+        LS_cart[index] = {
+          ...LS_cart[index],
+          amount:
+            Math.round((parseFloat(LS_cart[index].amount) + parseFloat(ingredient[0].amount)) * 100) / 100,
+        };
+        localStorage.setItem("MANGIARE_cart", JSON.stringify(LS_cart));
+      }
+    }
+  };
   //                 --------------- fin localStorage ---------------
 
-  const { title, image, instructions, raiting, diets } = recipe;
+  const { title, image, instructions, rating, diets, price } = recipe;
 
   useEffect(() => {
-    dispatch(getRecipeDetail(id));
+    setLoading(true);
+    dispatch(getRecipeDetail(id)).then((data) => {
+      setLoading(false);
+      return data;
+    });
     dispatch(getIngredients());
   }, [id]);
 
@@ -62,23 +104,31 @@ const RecipeDetail = () => {
         recipe.ingredients.map((el) => ({
           ...el,
           ...ingredients.find((aux) => aux.id === el.id),
+          inCart: cart.some((aux => aux.id === el.id && aux.unit === el.unit))
         }))
       );
     }
-  }, [recipe, ingredients, cart]);
+  }, [recipe, ingredients]);
 
-  const handleOnAdd = (id) => {
-    let new_owner = user ? user.email : "guest";
-    localStorage.setItem("MANGIARE_cart", JSON.stringify(cart));
-    localStorage.setItem("MANGIARE_user", JSON.stringify(new_owner));
-    return dispatch(addToCart(id ? [list.find((el) => el.id == id)] : list));
+  useEffect(() => {
+    setState({
+      ...state,
+      address:
+        JSON.parse(localStorage.getItem("MANGIARE_user"))?.address || null,
+    });
+  }, []);
+
+  const handleOnAdd = (id, unit) => {
+    handleLocalStorage([list.find((el) => ((el.id == id) && (el.unit === unit)))]);
+    setList(list.map(el => (el.id == id && el.unit === unit) ? { ...el, inCart: true} : {...el}));
+    dispatch(addToCart(id ? [list.find(el => ((el.id == id) && (el.unit === unit)))] : list));
   };
 
   const handleOnChange = ({ target }, unit) => {
     setList(
       list.map((el) =>
-      ((el.id != target.id) || (el.unit != unit))
-      ? el
+        el.id != target.id || el.unit != unit
+          ? el
           : { ...el, amount: target.value <= 0 ? 0 : target.value }
       )
     );
@@ -88,106 +138,272 @@ const RecipeDetail = () => {
     setList(list.map((el) => (el.id != id ? el : { ...el, unit: value })));
   };
 
+  const favorites = useSelector((state) => state.favorites.favorites);
+
+  useEffect(() => {
+    dispatch(getFavorites());
+  }, []);
+
+  let filteredFavorites =
+    LS_user &&
+    favorites
+      .filter((f) => f.userId === LS_user.id)
+      .filter((f) => f.recipeId === parseInt(id));
+
+  const handleFavorite = async () => {
+    if (filteredFavorites.length > 0) {
+      await dispatch(deleteReview(LS_user.id, id));
+      dispatch(getFavorites());
+    } else {
+      await dispatch(postReview(LS_user.id, id));
+      dispatch(getFavorites());
+    }
+  };
+
+  const handleConfirm = () => {
+    fetch(`${REACT_APP_BACK_URL}/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        address: state.address,
+        cart: list.map((el) => ({ ...el, units: [el.unit] })),
+        userId: user.id,
+      }),
+    })
+      .then((data) => data.json())
+      .then((order) => {
+        window.open(
+          `https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=${order.preferenceId}`,
+          "_self"
+        );
+      });
+  };
+
+  const handleOnAddressChange = ({ target }) => {
+    setState({ ...state, [target.name]: target.value });
+  };
+
   return (
     <>
-      <Box
-        width="100%"
-        height="1200px"
-        marginTop="1px"
-        backgroundImage={background}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          backgroundSize: "cover",
-          filter: "contrast(100%)",
-          backgroundPosition: "center center",
-          backgroundAttachment: "fixed",
-        }}
-      >
-        <Box width="100%" height="4%" marginBottom="none">
-          <NavBar />
-        </Box>
-
-        <Box
+      {" "}
+      {loading ? (
+        <div className={s.divSpinner}>
+          <Spinner
+            thickness="4px"
+            speed="0.65s"
+            emptyColor="gray.200"
+            color="blue.500"
+            size="xl"
+          />
+        </div>
+      ) : (
+        <Stack
+          // width={{ base: "lg", md: "3xl", lg: "6xl" }}
           width="100%"
-          height="1000px"
+          height="auto"
           marginTop="1px"
+          paddingTop="70px"
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
-            filter: "contrast(90%)",
+            backgroundSize: "auto",
+            backgroundPosition: "center",
           }}
         >
-          <Text fontSize="60px">{title}</Text>
-
-          <Box width="40%" height="40%" objectFit={"cover"} borderRadius="10px">
-            <img src={image} alt={title} />
+          <Box
+            width={{ base: "100%", md: "100%", lg: "100%", xl: "100%" }}
+            // height="10%"
+            marginBottom="none"
+          >
+            <NavBar />
           </Box>
+          <Box
+            width="100%"
+            height={["10rem", "10rem", "20rem", "20rem"]}
+            marginBottom="none"
+            backgroundImage={background}
+            style={{
+              backgroundSize: "cover",
+              filter: "contrast(100%)",
+              backgroundPosition: "center bottom 45%",
+            }}
+          ></Box>
 
-          <Tabs align="center" variant="enclosed">
-            <TabList>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>
-                Ingredients
-              </Tab>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>
-                Instructions
-              </Tab>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>Diets</Tab>
-              <Tab _selected={{ color: "white", bg: "blue.500" }}>Rating</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel backgroundColor="rgba(255, 255, 255, 0.7)">
-                {!list ? (
-                  <h3>Loading...</h3>
-                ) : (
-                  <IngredientsList
-                    items={list.map((el) => ({ ...el, units: [el.unit] }))}
-                    onChange={handleOnChange}
-                    onUnitChange={handleOnUnitChange}
-                    itemButton={{
-                      caption: "Add Item",
-                      action: handleOnAdd,
-                    }}
-                    cart={cart}
-                  />
-                )}
-              </TabPanel>
-              <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)">
-                <Box width="50%" color="black">
-                  <p>{instructions}</p>
-                </Box>
-              </TabPanel>
-              <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)">
-                <ul className="recipeDetail">
-                  {diets &&
-                    diets.map((diet, index) => {
-                      return <li key={index}>{diet}</li>;
-                    })}
-                </ul>
-              </TabPanel>
-              <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)" l>
-                <Box
-                  width="25%"
-                  height="40%"
-                  display="flex"
-                  alignContent="left"
-                  marginTop="1px"
-                  fontSize="20px"
+          <Box
+            width={{ base: "xsm", md: "2xl", lg: "6xl" }}
+            maxWidth="80%"
+            height="50%"
+            objectFit={"cover"}
+            borderRadius="10px"
+            style={{
+              position: "relative",
+            }}
+          >
+            <Text
+              fontSize={{ base: "36px", md: "40px", lg: "56px" }}
+              textAlign="center"
+              fontWeight="bold"
+              color="yellow.800"
+              backgroundColor="white"
+              opacity="0.5"
+            >
+              {title}
+            </Text>
+            <Image
+              borderRadius="50px"
+              width="560px"
+              height="370px"
+              margin="auto"
+              padding="20px"
+              src={image ? image : png}
+              alt={title}
+              className={!image ? s.noImg : null}
+            />
+            {filteredFavorites ? (
+              <div className={s.favoriteButtonDiv} onClick={handleFavorite}>
+                {filteredFavorites.length > 0 ? <FaHeart /> : <FaRegHeart />}
+              </div>
+            ) : null}
+          </Box>
+          <Stack>
+            <Tabs
+              font-size="sm"
+              width="50%"
+              size="md"
+              align="left"
+              variant="enclosed"
+              marginTop="90px"
+            >
+              <TabList>
+                <Tab _selected={{ color: "white", bg: "blue.500" }}>
+                  Ingredients
+                </Tab>
+                <Tab _selected={{ color: "white", bg: "blue.500" }}>
+                  Instructions
+                </Tab>
+                <Tab _selected={{ color: "white", bg: "blue.500" }}>Diets</Tab>
+                <Tab _selected={{ color: "white", bg: "blue.500" }}>Rating</Tab>
+              </TabList>
+              <TabPanels>
+                <TabPanel
+                  backgroundColor="rgba(255, 255, 255, 0.7)"
+                  width={{ base: "sm", md: "lg", lg: "2xl" }}
+                  //height={["200px", "300px", "400px"]}
+                  overflowY="scroll"
                 >
-                  Rating: {raiting}
-                </Box>
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
-        </Box>
-      </Box>
-      <NavLink className={s.navlinkGoBackButton} to={"/home"}>
-        <button>Go back</button>
-      </NavLink>
+                  {!list ? (
+                    <Text>Loading...</Text>
+                  ) : (
+                    <IngredientsList
+                      items={list.map((el) => ({ ...el, units: [el.unit]}))}
+                      onChange={handleOnChange}
+                      onUnitChange={handleOnUnitChange}
+                      itemButton={{
+                        caption: "Add to Cart",
+                        action: handleOnAdd,
+                      }}
+                    />
+                  )}
+                </TabPanel>
+                <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)">
+                  <Box width="100%" color="black">
+                    <Text>{instructions}</Text>
+                  </Box>
+                </TabPanel>
+                <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)">
+                  <UnorderedList className="recipeDetail">
+                    {diets &&
+                      diets.map((diet, index) => {
+                        return <ListItem key={index}>{diet}</ListItem>;
+                      })}
+                  </UnorderedList>
+                </TabPanel>
+                <TabPanel backgroundColor="rgba(255, 255, 255, 0.5)">
+                  <Box
+                    width="35%"
+                    height="45%"
+                    display="flex"
+                    alignContent="center"
+                    marginTop="1px"
+                    fontSize="20px"
+                  >
+                    Rating: {rating}
+                  </Box>
+                </TabPanel>
+              </TabPanels>
+            </Tabs>
+          </Stack>
+
+          <HStack>
+            <Box padding="20px">
+              <NavLink to={"/shoppingCart"}>
+                <Button colorScheme="teal" variant="solid" size="lg">
+                  Go to Cart
+                </Button>
+              </NavLink>
+            </Box>
+          </HStack>
+
+          {
+            (!user)
+              ? <HStack padding="20px">
+                  <Box>
+                    <p>Login to buy this recipe!</p>
+                  </Box>
+                </HStack>
+              : (
+                <HStack padding="20px">
+                  <Box>
+                    <Text>Shipping address: </Text>
+                    <Input
+                      type="text"
+                      id="address"
+                      name="address"
+                      value={state.address || ''}
+                      placeholder="Confirm shipping address..."
+                      onChange={handleOnAddressChange}
+                    />
+                  </Box>
+                  <Box>
+                    <Text visibility={state.address && "hidden"}>* Complete shipping address to proceed</Text>
+                    <Button
+                      style={{ marginLeft: "15px" }}
+                      colorScheme="teal"
+                      variant="solid"
+                      size="lg"
+                      onClick={handleConfirm}
+                      isDisabled={!state.address}
+                    >
+                      Fast Buy Recipe
+                    </Button>
+                  </Box>
+                </HStack>
+              )
+          }
+
+          <VStack>
+            <Box
+              w={["90%", "90%", "65%", "65%"]}
+              borderWidth="1px"
+              padding="10px"
+              borderRadius="lg"
+            >
+              <ReviewsBox />
+            </Box>
+            <Box />
+            <Box padding="10px">
+              <NavLink className={s.navlinkGoBackButton} to={"/home"}>
+                <Button colorScheme="teal" variant="outline" size="lg">
+                  Go Home
+                </Button>
+              </NavLink>
+            </Box>
+          </VStack>
+        </Stack>
+      )}
     </>
   );
 };

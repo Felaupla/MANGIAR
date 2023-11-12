@@ -12,9 +12,13 @@ import AboutUs from "./pages/AboutUs/AboutUs";
 import Contact from "./pages/Contact/Contact";
 import MyRecipes from "./components/MyRecipes/MyRecipes";
 import ShoppingCart from "./pages/ShoppingCart/ShoppingCart";
+import UserPage from "./pages/userPage/UserPage";
+import Appmodel from "../src/Admin/Appmodel";
+import Orders from "./pages/Orders/Orders";
 
-// axios.defaults.baseURL = 'http://localhost:3001/'
-axios.defaults.baseURL = "https://mangiare-production.up.railway.app/";
+const { REACT_APP_BACK_URL } = process.env;
+
+axios.defaults.baseURL = `${REACT_APP_BACK_URL}`;
 
 export default function App() {
   return (
@@ -27,10 +31,14 @@ export default function App() {
         <Route exact path="formUser" element={<CreateUser />} />
         <Route exact path="/recipes/:id" element={<RecipeDetail />} />
         <Route exact path="/createRecipe" element={<CreateRecipe />} />
+        <Route exact path="/orders" element={<Orders />} />
         <Route exact path="/aboutUs" element={<AboutUs />} />
         <Route exact path="/contact" element={<Contact />} />
         <Route exact path="/myRecipes" element={<MyRecipes />} />
+        <Route exact path="/orders" element={<Orders />} />
         <Route exact path="/shoppingCart" element={<ShoppingCart />} />
+        <Route exact path="/user" element={<UserPage />} />
+        <Route exact path="/admin" element={<Appmodel />} />
       </Routes>
     </>
   );
