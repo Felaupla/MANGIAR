@@ -26,7 +26,7 @@ const Modal = ({
     }
 
     const handleStatus = async (status, orderId) => {
-        fetch(`http://localhost:3001/orders`, {
+        fetch(`https://mangiar-production.up.railway.app/orders`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({status, orderId, userId: user.id}),
